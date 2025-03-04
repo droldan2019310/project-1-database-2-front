@@ -14,3 +14,7 @@
 .css-gobhyx-MuiDataGrid-root .MuiDataGrid-columnHeader, .css-gobhyx-MuiDataGrid-root .MuiDataGrid-cell{
     padding: 5px !important;
 }
+
+.react-flow{
+    height: 90% !important;
+}

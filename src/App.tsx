@@ -6,12 +6,12 @@ import 'reactflow/dist/style.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import LayoutRoutes from './general/LayoutRoutes';
 import Product from './pages/product/Product';
-import Provider from './pages/provider/Provider';
-import Branch from './pages/branch/Branch';
-import Invoice from './pages/invoice/Invoice';
-import RouteBranch from './pages/routeBranch/RouteBranch';
 import { ToastContainer } from 'react-toastify';
 import Home from './pages/home/Home';
+import ProviderGraph from './pages/provider/Provider';
+import BranchOfficeGraph from './pages/branch/Branch';
+import InvoiceGraph from './pages/invoice/Invoice';
+import RouteGraph from './pages/routeBranch/RouteBranch';
 
 function App() {
 
@@ -22,10 +22,10 @@ function App() {
           <Route element={<LayoutRoutes />}>
             <Route path="/" element={<Home />} />
             <Route path="/product" element={<Product />} />
-            <Route path="/provider" element={<Provider />} />
-            <Route path="/branch_offices" element={<Branch />} />
-            <Route path="/invoice" element={<Invoice />} />
-            <Route path="/routes" element={<RouteBranch />} />
+            <Route path="/provider" element={<ProviderGraph />} />
+            <Route path="/branch_offices" element={<BranchOfficeGraph />} />
+            <Route path="/invoice" element={<InvoiceGraph />} />
+            <Route path="/routes" element={<RouteGraph />} />
           </Route>
         </Routes>
         <ToastContainer />

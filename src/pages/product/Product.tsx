@@ -15,19 +15,19 @@ import ReactFlow, {
   NodeChange,
   EdgeChange,
 } from 'reactflow';
-
 import {
-    Dialog,
-    DialogTitle,
-    DialogContent,
-    DialogActions,
-    Button,
-    Typography,
-    Chip,
-  } from '@mui/material';
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Typography,
+  Chip,
+  Pagination
+} from '@mui/material';
 
 import 'reactflow/dist/style.css';
-import {useGetProducts, useGetProductRelationships} from '../../hooks/useProduct';
+import { useGetProducts } from '../../hooks/useProduct';
 import axiosInstance from '../../hooks/axiosInstance';
 import { toast } from 'react-toastify';
 
@@ -40,8 +40,7 @@ interface ProductI {
   expiration_date: string;
 }
 
-
-
+// ProductNode para renderizar cada nodo
 const ProductNode = ({ data }: { data: { product: ProductI; onDoubleClick: (product: ProductI) => void } }) => {
   return (
     <div
@@ -66,26 +65,25 @@ const ProductNode = ({ data }: { data: { product: ProductI; onDoubleClick: (prod
 };
 
 const Product: React.FC = () => {
+  const [page, setPage] = useState(1);
 
-  const { products, loading, error } = useGetProducts();
+  const { products, totalPages, loading, error } = useGetProducts(page);
 
-  
   const [nodes, setNodes] = useState<Node[]>([]);
-
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductI | null>(null);
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge(connection, eds));
-    handleCreateRelationship(connection!.source, connection.target);
+    handleCreateRelationship(connection.source, connection.target);
   }, []);
 
   async function handleCreateRelationship(sourceId?: any, targetId?: any) {
     try {
-        await axiosInstance.post('/product/relationship', { sourceId, targetId });
-        toast.success(`Relación SEEMS creada entre ${sourceId} y ${targetId}`);
+      await axiosInstance.post('/product/relationship', { sourceId, targetId });
+      toast.success(`Relación creada entre ${sourceId} y ${targetId}`);
     } catch (error) {
-        console.error('Error al crear la relación SEEMS', error);
+      console.error('Error al crear la relación', error);
     }
   }
 
@@ -107,97 +105,103 @@ const Product: React.FC = () => {
 
   const nodeTypes = useMemo(() => ({ product: ProductNode }), []);
 
-
-  
-
   useEffect(() => {
-      console.log('Productos recibidos:', products); // 👀 Log clave
-      if (products.length > 0) {
-        const radius = 300; // Radio del círculo
-        const centerX = 400; // Centro X
-        const centerY = 300; // Centro Y
+    if (products.length > 0) {
+      const radius = 300;
+      const centerX = 400;
+      const centerY = 300;
+      const angleStep = (2 * Math.PI) / products.length;
 
-        const angleStep = (2 * Math.PI) / products.length;
+      const initialNodes = products.map((product, index) => ({
+        id: product.id,
+        type: 'product',
+        position: {
+          x: centerX + radius * Math.cos(index * angleStep),
+          y: centerY + radius * Math.sin(index * angleStep),
+        },
+        data: { product, onDoubleClick: handleNodeDoubleClick },
+      }));
 
-        const initialNodes = products.map((product, index) => {
-            const angle = index * angleStep;
-            return {
-                id: product.id,
-                type: 'product',
-                position: {
-                    x: centerX + radius * Math.cos(angle),
-                    y: centerY + radius * Math.sin(angle),
-                },
-                data: { product, onDoubleClick: handleNodeDoubleClick },
-            };
-        });
-
-        setNodes(initialNodes);
-
-        fetchAllRelationships(products);
-      }
+      setNodes(initialNodes);
+      fetchAllRelationships(products);
+    }
   }, [products]);
 
   const fetchAllRelationships = async (products: ProductI[]) => {
     let allRelationships: Edge[] = [];
 
     for (const product of products) {
-        try {
-            const response = await axiosInstance.get(`/product/${product.id}/relationships`);
-            const productRelationships = response.data.map((rel: any) => ({
-                id: rel.id,
-                source: rel.source,
-                target: rel.target,
-            }));
-            allRelationships = allRelationships.concat(productRelationships);
-        } catch (error) {
-            console.error(`Error al cargar relaciones de ${product.name}`, error);
-        }
+      try {
+        const response = await axiosInstance.get(`/product/${product.id}/relationships`);
+        const productRelationships = response.data.map((rel: any) => ({
+          id: rel.id,
+          source: rel.source,
+          target: rel.target,
+        }));
+        allRelationships = allRelationships.concat(productRelationships);
+      } catch (error) {
+        console.error(`Error al cargar relaciones de ${product.name}`, error);
+      }
     }
 
     setEdges(allRelationships);
   };
 
+  const handlePageChange = (_: any, newPage: number) => {
+    setPage(newPage);
+  };
 
   return (
     <div style={{ width: '100%', height: '80vh', backgroundColor: '#F7F9FB' }}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        nodeTypes={nodeTypes}
-        fitView
-      >
-        <Background variant={BackgroundVariant.Dots} />
-        <MiniMap />
-        <Controls />
-      </ReactFlow>
+      {loading ? (
+        <p>Cargando productos...</p>
+      ) : error ? (
+        <p>{error}</p>
+      ) : (
+        <>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            fitView
+          >
+            <Background variant={BackgroundVariant.Dots} />
+            <MiniMap />
+            <Controls />
+          </ReactFlow>
 
-      {selectedProduct && (
-       <Dialog open={!!selectedProduct} onClose={handleCloseDialog}>
-            <DialogTitle>Detalles del Producto</DialogTitle>
-            <DialogContent dividers>
+          <div style={{ marginTop: 10, display: 'flex', justifyContent: 'center' }}>
+            <Pagination count={totalPages} page={page} onChange={handlePageChange} />
+          </div>
+
+          {selectedProduct && (
+            <Dialog open={!!selectedProduct} onClose={handleCloseDialog}>
+              <DialogTitle>Detalles del Producto</DialogTitle>
+              <DialogContent dividers>
                 {selectedProduct && (
-                <>
+                  <>
                     <Typography variant="h6">{selectedProduct.name}</Typography>
                     <Typography><strong>Categoría:</strong> {selectedProduct.category}</Typography>
                     <Typography><strong>Precio:</strong> Q{selectedProduct.price}</Typography>
                     <Typography><strong>Fecha de Expiración:</strong> {selectedProduct.expiration_date}</Typography>
                     <Typography><strong>Tags:</strong></Typography>
                     <div style={{ marginTop: 8 }}>
-                    {selectedProduct.tags.map(tag => (
+                      {selectedProduct.tags.map(tag => (
                         <Chip key={tag} label={tag} style={{ marginRight: 5 }} />
-                    ))}
+                      ))}
                     </div>
-                </>
+                  </>
                 )}
-            </DialogContent>
-            <DialogActions>
+              </DialogContent>
+              <DialogActions>
                 <Button onClick={handleCloseDialog} color="primary">Cerrar</Button>
-            </DialogActions>
-        </Dialog>
+              </DialogActions>
+            </Dialog>
+          )}
+        </>
       )}
     </div>
   );
