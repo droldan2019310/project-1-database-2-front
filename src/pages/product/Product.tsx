@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import ReactFlow, {
   Background,
   Controls,
@@ -27,6 +27,9 @@ import {
   } from '@mui/material';
 
 import 'reactflow/dist/style.css';
+import {useGetProducts, useGetProductRelationships} from '../../hooks/useProduct';
+import axiosInstance from '../../hooks/axiosInstance';
+import { toast } from 'react-toastify';
 
 interface ProductI {
   id: string;
@@ -37,10 +40,7 @@ interface ProductI {
   expiration_date: string;
 }
 
-const initialProducts: ProductI[] = [
-  { id: '1', name: 'Producto 1', category: 'Alimentos', price: 20, tags: ['comida', 'fresco'], expiration_date: '2025-12-31' },
-  { id: '2', name: 'Producto 2', category: 'Bebidas', price: 15, tags: ['bebida', 'refresco'], expiration_date: '2025-06-30' },
-];
+
 
 const ProductNode = ({ data }: { data: { product: ProductI; onDoubleClick: (product: ProductI) => void } }) => {
   return (
@@ -66,19 +66,28 @@ const ProductNode = ({ data }: { data: { product: ProductI; onDoubleClick: (prod
 };
 
 const Product: React.FC = () => {
-  const [nodes, setNodes] = useState<Node[]>(initialProducts.map(product => ({
-    id: product.id,
-    type: 'product',
-    position: { x: Math.random() * 400, y: Math.random() * 400 },
-    data: { product, onDoubleClick: handleNodeDoubleClick }
-  })));
+
+  const { products, loading, error } = useGetProducts();
+
+  
+  const [nodes, setNodes] = useState<Node[]>([]);
 
   const [edges, setEdges] = useState<Edge[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<ProductI | null>(null);
 
   const onConnect = useCallback((connection: Connection) => {
     setEdges((eds) => addEdge(connection, eds));
+    handleCreateRelationship(connection!.source, connection.target);
   }, []);
+
+  async function handleCreateRelationship(sourceId?: any, targetId?: any) {
+    try {
+        await axiosInstance.post('/product/relationship', { sourceId, targetId });
+        toast.success(`Relación SEEMS creada entre ${sourceId} y ${targetId}`);
+    } catch (error) {
+        console.error('Error al crear la relación SEEMS', error);
+    }
+  }
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -97,6 +106,58 @@ const Product: React.FC = () => {
   };
 
   const nodeTypes = useMemo(() => ({ product: ProductNode }), []);
+
+
+  
+
+  useEffect(() => {
+      console.log('Productos recibidos:', products); // 👀 Log clave
+      if (products.length > 0) {
+        const radius = 300; // Radio del círculo
+        const centerX = 400; // Centro X
+        const centerY = 300; // Centro Y
+
+        const angleStep = (2 * Math.PI) / products.length;
+
+        const initialNodes = products.map((product, index) => {
+            const angle = index * angleStep;
+            return {
+                id: product.id,
+                type: 'product',
+                position: {
+                    x: centerX + radius * Math.cos(angle),
+                    y: centerY + radius * Math.sin(angle),
+                },
+                data: { product, onDoubleClick: handleNodeDoubleClick },
+            };
+        });
+
+        setNodes(initialNodes);
+
+        fetchAllRelationships(products);
+      }
+  }, [products]);
+
+  const fetchAllRelationships = async (products: ProductI[]) => {
+    let allRelationships: Edge[] = [];
+
+    for (const product of products) {
+        try {
+            const response = await axiosInstance.get(`/product/${product.id}/relationships`);
+            const productRelationships = response.data.map((rel: any) => ({
+                id: rel.id,
+                source: rel.source,
+                target: rel.target,
+            }));
+            allRelationships = allRelationships.concat(productRelationships);
+        } catch (error) {
+            console.error(`Error al cargar relaciones de ${product.name}`, error);
+        }
+    }
+
+    setEdges(allRelationships);
+  };
+
 
   return (
     <div style={{ width: '100%', height: '80vh', backgroundColor: '#F7F9FB' }}>

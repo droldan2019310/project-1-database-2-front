@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import './App.css'
+import 'react-toastify/dist/ReactToastify.css';
 import 'reactflow/dist/style.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import LayoutRoutes from './general/LayoutRoutes';
