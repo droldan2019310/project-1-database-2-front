@@ -1,21 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Sidebar, Menu, MenuItem } from "react-pro-sidebar";
-import { Box, IconButton, Typography, useTheme } from "@mui/material";
+import { Box, IconButton, useTheme } from "@mui/material";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import MenuOutlinedIcon from "@mui/icons-material/MenuOutlined";
 import InventoryIcon from '@mui/icons-material/Inventory';
 import BallotIcon from '@mui/icons-material/Ballot';
 import CategoryIcon from '@mui/icons-material/Category';
-import AppRegistrationIcon from '@mui/icons-material/AppRegistration';
-import BusinessIcon from '@mui/icons-material/Business';
-import PeopleIcon from '@mui/icons-material/People';
 import { Link } from 'react-router-dom';
-import ListAltIcon from '@mui/icons-material/ListAlt';
-import SettingsIcon from '@mui/icons-material/Settings';
 
-interface User {
-  is_superadmin: boolean;
-}
+
 
 const MySidebar: React.FC = () => {
   const theme = useTheme();
