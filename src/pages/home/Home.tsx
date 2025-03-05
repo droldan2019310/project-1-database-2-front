@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 // react-bootstrap components
 import {
   Badge,
@@ -12,6 +12,10 @@ import {
   Col,
   Form,
   OverlayTrigger,
+  CardHeader,
+  CardTitle,
+  CardBody,
+  CardFooter,
 } from "react-bootstrap";
 import {
     PieChart,
@@ -33,6 +37,8 @@ import {
   Bar,
   Legend,
 } from "recharts";
+import { useGetBadDistributedBranches, useGetLongestTimeRoute, useGetMostLoadedRoute, useGetMostPurchasedProduct, useGetTopProviders, useGetTopSalesBranchOffices } from "../../hooks/useStats";
+import { CircularProgress } from "@mui/material";
 
 const data = [
     { time: "9:00AM", series1: 287, series2: 67, series3: 23 },
@@ -45,185 +51,252 @@ const data = [
     { time: "6:00AM", series1: 695, series2: 437, series3: 308 },
 ];
 
-const dataPie = [
-    { name: "Open", value: 40 },
-    { name: "Bounce", value: 20 },
-    { name: "Unsubscribe", value: 40 },
-];
-const COLORS = ["#8884d8", "#ff4c4c", "#ffc658"]; 
 
-const dataBar = [
-    { month: "Jan", series1: 542, series2: 412 },
-    { month: "Feb", series1: 443, series2: 243 },
-    { month: "Mar", series1: 320, series2: 280 },
-    { month: "Apr", series1: 780, series2: 580 },
-    { month: "Mai", series1: 553, series2: 453 },
-    { month: "Jun", series1: 453, series2: 353 },
-    { month: "Jul", series1: 326, series2: 300 },
-    { month: "Aug", series1: 434, series2: 364 },
-    { month: "Sep", series1: 568, series2: 368 },
-    { month: "Oct", series1: 610, series2: 410 },
-    { month: "Nov", series1: 756, series2: 636 },
-    { month: "Dec", series1: 895, series2: 695 },
-];
+const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#d0ed57"];
+
 
 const Home: React.FC = () => {
+
+  const { data: branches, loading, error } = useGetBadDistributedBranches();
+
+  // Preparamos los datos para el gráfico de barras
+  const chartDataBranches = branches.map((item) => ({
+    branchName: item.branchOffice.Name,
+    distance: item.route.Distance_KM,
+  }));
+
+
+  const { branchOffices } = useGetTopSalesBranchOffices();
+  const [chartDataTop5, setChartData] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (branchOffices.length > 0) {
+      const formattedData = branchOffices.map((branch, index) => ({
+        branchName: branch.Name,
+        salesCount: branch.salesCount,
+      }));
+
+      setChartData(formattedData);
+    }
+  }, [branchOffices]);
+
+  const { route, } = useGetMostLoadedRoute()
+  const [mostLoadedRoute, setMostLoadedRoute] = useState<string>("Cargando...");
+  const [mostLoadedDistance, setMostLoadedDistance] = useState<string>("...");
+
+  useEffect(() => {
+    if (route) {
+      setMostLoadedRoute(route.Name);
+      setMostLoadedDistance(`${route.Distance_KM} KM`);
+    }
+    
+  }, [route]);
+
+  
+  const { product: mostPurchasedProduct, loading: loadingMostPurchasedProduct } = useGetMostPurchasedProduct();
+  const { route:routeCard, deliveryName, arriveDate } = useGetLongestTimeRoute();
+
+
+  const cards = [
+    
+    {
+      icon: "nc-icon nc-delivery-fast text-primary",
+      category: "Ruta más cargada",
+      value: loading ? "Cargando..." : mostLoadedRoute,
+      footer: `${mostLoadedDistance}`,
+      footerIcon: "fas fa-road mr-1",
+    },
+    {
+      icon: "nc-icon nc-tag-content text-success",
+      category: "Producto más comprado",
+      value: loadingMostPurchasedProduct ? "Cargando..." : mostPurchasedProduct?.Name || "N/A",
+      footer: `Comprado ${mostPurchasedProduct?.purchaseCount || 0} veces`,
+      footerIcon: "fas fa-shopping-cart mr-1",
+    },
+    {
+      icon: "nc-icon nc-time-alarm text-danger",
+      category: "Ruta más larga (tiempo)",
+      value: loading ? "Cargando..." : deliveryName,
+      footer: `${routeCard}`,
+      footerIcon: "fas fa-clock mr-1",
+    },
+  ];
+
+
+  const { topProviders } = useGetTopProviders();
+    const [chartDataProviders, setChartDataProviders] = useState<{ name: string; value: number }[]>([]);
+
+    useEffect(() => {
+        if (topProviders.length > 0) {
+            const formattedData = topProviders.map(provider => ({
+                name: provider.provider,
+                value: provider.sales
+            }));
+            setChartDataProviders(formattedData);
+        }
+  }, [topProviders]);
+
+
   return (
     <Container fluid>
       <Row>
-        {[
-          {
-            icon: "nc-icon nc-chart text-warning",
-            category: "Number",
-            value: "150GB",
-            footer: "Update Now",
-            footerIcon: "fas fa-redo mr-1",
-          },
-          {
-            icon: "nc-icon nc-light-3 text-success",
-            category: "Revenue",
-            value: "$ 1,345",
-            footer: "Last day",
-            footerIcon: "far fa-calendar-alt mr-1",
-          },
-          {
-            icon: "nc-icon nc-vector text-danger",
-            category: "Errors",
-            value: "23",
-            footer: "In the last hour",
-            footerIcon: "far fa-clock-o mr-1",
-          },
-          {
-            icon: "nc-icon nc-favourite-28 text-primary",
-            category: "Followers",
-            value: "+45K",
-            footer: "Update now",
-            footerIcon: "fas fa-redo mr-1",
-          },
-        ].map((item, index) => (
-          <Col lg="3" sm="6" key={index}>
-            <Card className="card-stats">
-              <Card.Body>
-                <Row>
-                  <Col xs="5">
-                    <div className="icon-big text-center icon-warning">
-                      <i className={item.icon}></i>
-                    </div>
-                  </Col>
-                  <Col xs="7">
-                    <div className="numbers">
-                      <p className="card-category">{item.category}</p>
-                      <Card.Title as="h4">{item.value}</Card.Title>
-                    </div>
-                  </Col>
-                </Row>
-              </Card.Body>
-              <Card.Footer>
-                <hr />
-                <div className="stats">
-                  <i className={item.footerIcon}></i> {item.footer}
-                </div>
-              </Card.Footer>
-            </Card>
-          </Col>
+        {cards.map((item, index) => (
+            <Col lg="3" sm="6" key={index}>
+              <Card className="card-stats">
+                <Card.Body>
+                  <Row>
+                    <Col xs="5">
+                      <div className="icon-big text-center icon-warning">
+                        <i className={item.icon}></i>
+                      </div>
+                    </Col>
+                    <Col xs="7">
+                      <div className="numbers">
+                        <p className="card-category">{item.category}</p>
+                        <Card.Title as="h4">{item.value}</Card.Title>
+                      </div>
+                    </Col>
+                  </Row>
+                </Card.Body>
+                <Card.Footer>
+                  <hr />
+                  <div className="stats">
+                    <i className={item.footerIcon}></i> {item.footer}
+                  </div>
+                </Card.Footer>
+              </Card>
+            </Col>
         ))}
       </Row>
 
       <Row>
         <Col md="8">
-          <Card>
-            <Card.Header>
-              <Card.Title as="h4">Users Behavior</Card.Title>
-              <p className="card-category">24 Hours performance</p>
-            </Card.Header>
-            <Card.Body>
+        <Card>
+            <CardHeader>
+              <CardTitle as="h4">Top 5 Sucursales con Más Ventas</CardTitle>
+              <p className="card-category">Ventas totales históricas</p>
+            </CardHeader>
+
+            <CardBody>
+              {loading ? (
+                <p>Cargando datos...</p>
+              ) : error ? (
+                <p style={{ color: "red" }}>Error: {error}</p>
+              ) : (
                 <ResponsiveContainer width="100%" height={245}>
-                    <LineChart data={data} margin={{ right: 50 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="time" />
-                        <YAxis domain={[0, 800]} />
-                        <Tooltip />
-                        <Line type="monotone" dataKey="series1" stroke="#8884d8" name="Open" />
-                        <Line type="monotone" dataKey="series2" stroke="#82ca9d" name="Click" />
-                        <Line
-                        type="monotone"
-                        dataKey="series3"
-                        stroke="#ffc658"
-                        name="Click Second Time"
-                        />
-                    </LineChart>
+                  <LineChart data={chartDataTop5} margin={{ right: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="branchName"
+                      angle={-45}
+                      textAnchor="end"
+                      height={70}
+                    />
+                    <YAxis />
+                    <Tooltip />
+                    <Line
+                      type="monotone"
+                      dataKey="salesCount"
+                      stroke="#8884d8"
+                      name="Ventas"
+                    />
+                  </LineChart>
                 </ResponsiveContainer>
-            </Card.Body>
-            <Card.Footer>
+              )}
+            </CardBody>
+
+            <CardFooter>
               <div className="legend">
-                <i className="fas fa-circle text-info"></i> Open{" "}
-                <i className="fas fa-circle text-danger"></i> Click{" "}
-                <i className="fas fa-circle text-warning"></i> Click Second Time
+                <i className="fas fa-circle text-info"></i> Ventas Totales
               </div>
               <hr />
               <div className="stats">
-                <i className="fas fa-history"></i> Updated 3 minutes ago
+                <i className="fas fa-history"></i> Actualizado hace unos minutos
               </div>
-            </Card.Footer>
+            </CardFooter>
           </Card>
         </Col>
 
         <Col md="4">
-          <Card>
-            <Card.Header>
-              <Card.Title as="h4">Email Statistics</Card.Title>
-              <p className="card-category">Last Campaign Performance</p>
-            </Card.Header>
-            <Card.Body>
-              <div className="ct-chart ct-perfect-fourth" id="chartPreferences">
-                <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie data={dataPie} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={60} outerRadius={80} fill="#82ca9d" label />
-                    </PieChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="legend">
-                <i className="fas fa-circle text-info"></i> Open{" "}
-                <i className="fas fa-circle text-danger"></i> Bounce{" "}
-                <i className="fas fa-circle text-warning"></i> Unsubscribe
-              </div>
-              <hr />
-              <div className="stats">
-                <i className="far fa-clock"></i> Campaign sent 2 days ago
-              </div>
-            </Card.Body>
-          </Card>
+            <Card>
+                <Card.Header>
+                    <Card.Title as="h4">Top Proveedores</Card.Title>
+                    <p className="card-category">Proveedores con más ventas</p>
+                </Card.Header>
+                <Card.Body>
+                    {loading ? (
+                        <p>Cargando...</p>
+                    ) : error ? (
+                        <p style={{ color: "red" }}>{error}</p>
+                    ) : (
+                        <div className="ct-chart ct-perfect-fourth" id="chartPreferences">
+                            <ResponsiveContainer width="100%" height={250}>
+                                <PieChart>
+                                    <Pie
+                                        data={chartDataProviders}
+                                        dataKey="value"
+                                        nameKey="name"
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={60}
+                                        outerRadius={80}
+                                        fill="#82ca9d"
+                                        label
+                                    >
+                                        {chartDataProviders.map((_, index) => (
+                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                        ))}
+                                    </Pie>
+                                    <Tooltip />
+                                </PieChart>
+                            </ResponsiveContainer>
+                        </div>
+                    )}
+                    <hr />
+                    <div className="stats">
+                        <i className="far fa-clock"></i> Datos actualizados recientemente
+                    </div>
+                </Card.Body>
+            </Card>
         </Col>
       </Row>
 
       <Row>
         <Col md="6">
-          <Card>
+        <Card>
             <Card.Header>
-              <Card.Title as="h4">2017 Sales</Card.Title>
-              <p className="card-category">All products including Taxes</p>
+              <Card.Title as="h4">Sucursales con Mala Distribución</Card.Title>
+              <p className="card-category">Distancia excesiva ( 1900 KM)</p>
             </Card.Header>
-            <Card.Body>
-                <ResponsiveContainer width="100%" height={245}>
-                    <BarChart data={dataBar} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" />
-                        <XAxis dataKey="month" />
-                        <YAxis />
-                        <Tooltip />
-                        <Legend />
-                        <Bar dataKey="series1" fill="#8884d8" name="Tesla Model S" />
-                        <Bar dataKey="series2" fill="#82ca9d" name="BMW 5 Series" />
-                    </BarChart>
+            <Card.Body style={{ height: 300 }}>
+              {loading ? (
+                <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                  <CircularProgress />
+                </div>
+              ) : error ? (
+                <p style={{ color: "red", textAlign: "center" }}>{error}</p>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartDataBranches} margin={{ top: 5, right: 30, left: 20, bottom: 50 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="branchName" angle={-45} textAnchor="end" height={70} />
+                    <YAxis
+                      domain={[1900, 2000]} 
+                      tickCount={5}         
+                    />
+                    <Tooltip />
+                    <Bar dataKey="distance" fill="#8884d8" name="Distancia (KM)" />
+                  </BarChart>
                 </ResponsiveContainer>
+              )}
             </Card.Body>
             <Card.Footer>
               <div className="legend">
-                <i className="fas fa-circle text-info"></i> Tesla Model S{" "}
-                <i className="fas fa-circle text-danger"></i> BMW 5 Series
+                <i className="fas fa-chart-bar"></i> Distancia de la ruta por sucursal
               </div>
               <hr />
               <div className="stats">
-                <i className="fas fa-check"></i> Data information certified
+                <i className="fas fa-history"></i> Actualizado en tiempo real
               </div>
             </Card.Footer>
           </Card>
