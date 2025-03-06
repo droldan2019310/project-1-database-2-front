@@ -72,3 +72,51 @@ export function useGetRoutes(page: number = 1) {
 
     return { routes, totalPages, loading, error };
 }
+
+
+
+interface CreateRouteRequest {
+    quantity: number;
+    delivery_name: string;
+    arrive_date: string;
+    arrive_hour: string;
+    company: string;
+    distance_km: number;
+}
+
+interface CreatedRouteResponse {
+    id: string;
+    Quantity: number;
+    Delivery_name: string;
+    Arrive_date: {
+        year: { low: number };
+        month: { low: number };
+        day: { low: number };
+    };
+    Arrive_hour: string;
+    Company: string;
+    Distance_KM: number;
+    Voided: boolean;
+}
+
+export function useCreateRoute() {
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const createRoute = async (routeData: CreateRouteRequest): Promise<CreatedRouteResponse | null> => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await axiosInstance.post<CreatedRouteResponse>('/route', routeData);
+            return response.data;
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Error al crear la ruta');
+            return null;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return { createRoute, loading, error };
+}

@@ -16,10 +16,17 @@ import ReactFlow, {
     Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { useGetRoutes } from '../../hooks/useRoute';
-import { Pagination, CircularProgress, Dialog, DialogTitle, DialogContent, Typography, DialogActions, Button, Chip } from '@mui/material';
+import axiosInstance from '../../hooks/axiosInstance';
+import { Pagination, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, Button, Box, TextField, IconButton, Typography, Menu, MenuItem } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import AddIcon from '@mui/icons-material/Add';
+import CreateDialogBranch from '../../dialog/CreateDialogBranchOffice';
+import CreateDialogProductCloned from '../../dialog/CreateDialogProductInvoice';
+import CreateDialogRoute from '../../dialog/CreateDialogRoute';
 
-// Interfaces para tipar correctamente
+// Interfaces
 interface BranchOffice {
     id: string;
     Income: string;
@@ -52,7 +59,7 @@ interface Route {
     products: Product[];
 }
 
-// NodeData para manejar doble clic
+// NodeData
 type NodeData = {
     type: 'route' | 'branchOffice' | 'product';
     route?: Route;
@@ -61,28 +68,38 @@ type NodeData = {
     onDoubleClick: (nodeData: NodeData) => void;
 };
 
-// Nodos personalizados
+// Estilo base para nodos
+const nodeStyle = (bgColor: string, borderColor: string): React.CSSProperties => ({
+    padding: 10,
+    backgroundColor: bgColor,
+    border: `1px solid ${borderColor}`,
+    borderRadius: 5,
+    textAlign: 'center',
+    cursor: 'pointer',
+    minWidth: 150,
+});
+
+// Nodo Ruta
 const RouteNode = ({ data }: { data: NodeData }) => (
-    <div onDoubleClick={() => data.onDoubleClick(data)}
-        style={{ padding: 10, backgroundColor: '#cce5ff', border: '1px solid #66b3ff', borderRadius: 5, cursor: 'pointer', textAlign: 'center' }}>
+    <div onDoubleClick={() => data.onDoubleClick(data)} style={nodeStyle('#cce5ff', '#66b3ff')}>
         <strong>{data.route?.Name}</strong>
         <p>{data.route?.Company}</p>
         <Handle type="source" position={Position.Right} />
     </div>
 );
 
+// Nodo Sucursal
 const BranchOfficeNode = ({ data }: { data: NodeData }) => (
-    <div onDoubleClick={() => data.onDoubleClick(data)}
-        style={{ padding: 10, backgroundColor: '#f0f0f0', border: '1px solid #aaa', borderRadius: 5, cursor: 'pointer', textAlign: 'center' }}>
+    <div onDoubleClick={() => data.onDoubleClick(data)} style={nodeStyle('#f0f0f0', '#aaa')}>
         <strong>{data.branchOffice?.Name}</strong>
         <p>{data.branchOffice?.Location}</p>
         <Handle type="target" position={Position.Left} />
     </div>
 );
 
+// Nodo Producto
 const ProductNode = ({ data }: { data: NodeData }) => (
-    <div onDoubleClick={() => data.onDoubleClick(data)}
-        style={{ padding: 10, backgroundColor: '#ffefcc', border: '1px solid #ffb347', borderRadius: 5, cursor: 'pointer', textAlign: 'center' }}>
+    <div onDoubleClick={() => data.onDoubleClick(data)} style={nodeStyle('#ffefcc', '#ffb347')}>
         <strong>{data.product?.Name}</strong>
         <p>{data.product?.Category}</p>
         <Handle type="target" position={Position.Left} />
@@ -91,63 +108,87 @@ const ProductNode = ({ data }: { data: NodeData }) => (
 
 const RouteGraph: React.FC = () => {
     const [page, setPage] = useState(1);
-    const { routes, totalPages, loading, error } = useGetRoutes(page);
+    const [search, setSearch] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [routes, setRoutes] = useState<Route[]>([]);
+    const [totalPages, setTotalPages] = useState(1);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [nodes, setNodes] = useState<Node<NodeData>[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
 
-    useEffect(() => {
-        if (routes.length === 0) return;
+    const fetchRoutes = async (currentPage: number) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const url = isSearching
+                ? `/route/search/${search}`
+                : `/route?page=${currentPage}&limit=5`;
 
+            const response = await axiosInstance.get(url);
+            const { routes, totalPages } = response.data;
+
+            setRoutes(routes);
+            if (!isSearching) {
+                setTotalPages(totalPages);
+            } else {
+                setTotalPages(1);  // Sin paginación en búsqueda
+            }
+        } catch (err: any) {
+            setError(err.message || 'Error al cargar rutas');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchRoutes(page);
+    }, [page, isSearching]);
+
+    useEffect(() => {
         const newNodes: Node<NodeData>[] = [];
         const newEdges: Edge[] = [];
 
-        const centerX = 400;
-        const centerY = 300;
-        const angleStep = (2 * Math.PI) / routes.length;
-        const radius = 300;
-
         routes.forEach((route, index) => {
-            const angle = index * angleStep;
-            const routeX = centerX + radius * Math.cos(angle);
-            const routeY = centerY + radius * Math.sin(angle);
+            const yBase = index * 200;
 
             newNodes.push({
                 id: route.id,
                 type: 'route',
-                position: { x: routeX, y: routeY },
+                position: { x: 300, y: yBase },
                 data: { type: 'route', route, onDoubleClick: handleNodeDoubleClick },
+                draggable: true,
             });
 
             if (route.branchOffice) {
-                const branchX = routeX + 300;
-                const branchY = routeY - 50;
-
+                const branchOffice = route.branchOffice;
                 newNodes.push({
-                    id: route.branchOffice.id,
+                    id: branchOffice.id,
                     type: 'branchOffice',
-                    position: { x: branchX, y: branchY },
-                    data: { type: 'branchOffice', branchOffice: route.branchOffice, onDoubleClick: handleNodeDoubleClick },
+                    position: { x: 600, y: yBase },
+                    data: { type: 'branchOffice', branchOffice, onDoubleClick: handleNodeDoubleClick },
+                    draggable: true,
                 });
 
                 newEdges.push({
-                    id: `edge-${route.id}-${route.branchOffice.id}`,
+                    id: `edge-${route.id}-${branchOffice.id}`,
                     source: route.id,
-                    target: route.branchOffice.id,
-                    label: route.branchOffice.relationshipType,
+                    target: branchOffice.id,
+                    label: branchOffice.relationshipType,
+                    animated: true,
+                    style: { stroke: '#888' },
                 });
             }
 
-            route.products.forEach((product, idx) => {
-                const productX = routeX + 300;
-                const productY = routeY + idx * 80;
-
+            route.products.forEach((product, subIndex) => {
                 newNodes.push({
                     id: product.id,
                     type: 'product',
-                    position: { x: productX, y: productY },
+                    position: { x: 900, y: yBase + subIndex * 80 },
                     data: { type: 'product', product, onDoubleClick: handleNodeDoubleClick },
+                    draggable: true,
                 });
 
                 newEdges.push({
@@ -155,73 +196,168 @@ const RouteGraph: React.FC = () => {
                     source: route.id,
                     target: product.id,
                     label: product.relationshipType,
+                    animated: true,
+                    style: { stroke: '#888' },
                 });
             });
         });
 
         setNodes(newNodes);
         setEdges(newEdges);
-
     }, [routes]);
 
     const handleNodeDoubleClick = (nodeData: NodeData) => {
         setSelectedNode(nodeData);
     };
 
-    const onNodesChange = useCallback((changes: NodeChange[]) => setNodes(nds => applyNodeChanges(changes, nds)), []);
-    const onEdgesChange = useCallback((changes: EdgeChange[]) => setEdges(eds => applyEdgeChanges(changes, eds)), []);
-    const onConnect = useCallback((connection: Connection) => setEdges(eds => addEdge(connection, eds)), []);
     const handleCloseDialog = () => setSelectedNode(null);
 
-    const nodeTypes = useMemo(() => ({ route: RouteNode, branchOffice: BranchOfficeNode, product: ProductNode }), []);
+    const onNodesChange = useCallback((changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)), []);
+    const onEdgesChange = useCallback((changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)), []);
+    const onConnect = useCallback((connection: Connection) => setEdges((eds) => addEdge(connection, eds)), []);
+
+    const handleSearch = () => {
+        if (isSearching) {
+            setSearch('');
+            setIsSearching(false);
+            fetchRoutes(page);
+        } else {
+            setIsSearching(true);
+            setPage(1);
+        }
+    };
+
+    const nodeTypes = useMemo(() => ({
+        route: RouteNode,
+        branchOffice: BranchOfficeNode,
+        product: ProductNode,
+    }), []);
+
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+            
+    const [openCreateDialogBranch, setOpenCreateDialogBranch] = useState(false);
+            
+    const handleMenuOpen = (event: React.MouseEvent<HTMLButtonElement>) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+        const handleMenuClose = () => {
+        setAnchorEl(null);
+    };
+
+    const handleBranchCreated = (newBranch: any) => {
+        const newNode: Node = {
+            id: newBranch.id,
+                type: 'branchOffice',
+                position: { x: 300, y: 300 },
+                data: { type: 'branchOffice', branchOffice: newBranch, onDoubleClick: handleNodeDoubleClick },
+            draggable: true,
+        };
+
+        
+        
+        setNodes((prevNodes) => [...prevNodes, newNode]);
+    };
+
+    const [openCreateDialogProduct, setOpenCreateDialogProduct] = useState(false);
+    const [openCreateDialogRoute, setOpenCreateDialogRoute] = useState(false);
+
+    const handleProductCreated = (newProduct: any) => {
+        const newNode: Node = {
+            id: newProduct.id,  // El id que retorna el backend (elementId de Neo4j)
+            type: 'product',     // Tipo de nodo es 'product'
+            position: { x: 600, y: 300 },  // Ajusta la posición si es necesario
+            data: { type: 'product', product: newProduct, onDoubleClick: handleNodeDoubleClick },
+            draggable: true,
+        };
+    
+        setNodes((prevNodes) => [...prevNodes, newNode]);
+    };
+
+    const handleRouteCreated = (newRoute: any) => {
+        const newNode: Node = {
+            id: newRoute.id,
+            type: 'route',
+            position: { x: 300, y: 300 },  // Puedes ajustar la posición inicial
+            data: { type: 'route', route: newRoute, onDoubleClick: handleNodeDoubleClick },
+            draggable: true,
+        };
+    
+        setNodes((prevNodes) => [...prevNodes, newNode]);
+    };
+    
 
     return (
         <div style={{ width: '100%', height: '80vh', backgroundColor: '#F7F9FB' }}>
-            {loading ? <CircularProgress /> : error ? <p style={{ color: 'red' }}>{error}</p> : (
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <TextField
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    placeholder="Buscar por Company"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                <IconButton color="primary" onClick={handleSearch}>
+                    {isSearching ? <ClearIcon /> : <SearchIcon />}
+                </IconButton>
+                
+                <IconButton color="primary" onClick={handleMenuOpen}>
+                    <MoreVertIcon />
+                </IconButton>
+               
+                <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+                       
+                           
+                    
+                    <MenuItem onClick={() => { setOpenCreateDialogBranch(true); handleMenuClose(); }}>
+                        <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                        Agregar Branch Office
+                    </MenuItem>
+                    <MenuItem onClick={() => { setOpenCreateDialogProduct(true); handleMenuClose(); }}>
+                        <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                        Agregar Producto
+                    </MenuItem>
+                    <MenuItem onClick={() => { setOpenCreateDialogRoute(true); handleMenuClose(); }}>
+                        <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                        Agregar Routes
+                    </MenuItem>
+
+                </Menu>
+            </Box>
+            
+
+            {loading ? <CircularProgress /> : error ? <Typography color="error">{error}</Typography> : (
                 <>
-                    <ReactFlow
-                        nodes={nodes}
-                        edges={edges}
-                        nodeTypes={nodeTypes}
-                        onNodesChange={onNodesChange}
-                        onEdgesChange={onEdgesChange}
-                        onConnect={onConnect}
-                        fitView
-                    >
+                    <ReactFlow nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect} nodeTypes={nodeTypes} fitView>
                         <Background variant={BackgroundVariant.Dots} />
                         <MiniMap />
                         <Controls />
                     </ReactFlow>
 
-                    <Pagination count={totalPages} page={page} onChange={(_, newPage) => setPage(newPage)} />
+                    <CreateDialogBranch
+                        open={openCreateDialogBranch}
+                        onClose={() => setOpenCreateDialogBranch(false)}
+                        onBranchCreated={handleBranchCreated}
+                    />
 
-                    {/* Dialog para mostrar detalles */}
+                    <CreateDialogRoute
+                        open={openCreateDialogRoute}
+                        onClose={() => setOpenCreateDialogRoute(false)}
+                        onRouteCreated={handleRouteCreated}
+                    />
+
+                    <CreateDialogProductCloned
+                        open={openCreateDialogProduct}
+                        onClose={() => setOpenCreateDialogProduct(false)}
+                        onProductCreated={handleProductCreated}
+                    />
+
+
+                    {!isSearching && <Pagination count={totalPages} page={page} onChange={(_, newPage) => setPage(newPage)} />}
+
                     <Dialog open={!!selectedNode} onClose={handleCloseDialog}>
-                        <DialogTitle>
-                            {selectedNode?.type === 'route' ? 'Detalles de la Ruta' : selectedNode?.type === 'branchOffice' ? 'Detalles de la Sucursal' : 'Detalles del Producto'}
-                        </DialogTitle>
-                        <DialogContent dividers>
-                            {selectedNode?.type === 'route' && selectedNode.route && (
-                                <>
-                                    <Typography>Nombre: {selectedNode.route.Name}</Typography>
-                                    <Typography>Compañía: {selectedNode.route.Company}</Typography>
-                                    <Typography>Distancia: {selectedNode.route.Distance_KM} KM</Typography>
-                                </>
-                            )}
-                            {selectedNode?.type === 'branchOffice' && selectedNode.branchOffice && (
-                                <>
-                                    <Typography>Nombre: {selectedNode.branchOffice.Name}</Typography>
-                                    <Typography>Ubicación: {selectedNode.branchOffice.Location}</Typography>
-                                </>
-                            )}
-                            {selectedNode?.type === 'product' && selectedNode.product && (
-                                <>
-                                    <Typography>Nombre: {selectedNode.product.Name}</Typography>
-                                    <Typography>Categoría: {selectedNode.product.Category}</Typography>
-                                    <Typography>Precio: Q{selectedNode.product.Price}</Typography>
-                                </>
-                            )}
-                        </DialogContent>
+                        <DialogContent><pre>{JSON.stringify(selectedNode, null, 2)}</pre></DialogContent>
                         <DialogActions><Button onClick={handleCloseDialog}>Cerrar</Button></DialogActions>
                     </Dialog>
                 </>

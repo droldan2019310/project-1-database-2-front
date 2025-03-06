@@ -87,3 +87,101 @@ export function useGetInvoices(page: number = 1) {
 
     return { invoices, totalPages, loading, error };
 }
+
+// Tipos para la request y la respuesta
+interface CreateInvoiceRequest {
+    id: number;
+    name: string;
+    nit: string;
+    total: number;
+    cashier_main: string;
+    date: string;
+    status: string;
+    notes: string;
+}
+
+interface CreatedInvoiceResponse {
+    id: string;
+    ID: number;
+    Name: string;
+    NIT: string;
+    Total: number;
+    Cashier_main: string;
+    Date: string;
+    Status: string;
+    Notes: string;
+    Voided: boolean;
+}
+
+// Hook para crear factura
+export function useCreateInvoice() {
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const createInvoice = async (invoiceData: CreateInvoiceRequest): Promise<CreatedInvoiceResponse | null> => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await axiosInstance.post<CreatedInvoiceResponse>('/invoices', invoiceData);
+            return response.data;  // Retorna la factura creada
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Error al crear la factura');
+            return null;  // En caso de error retorna null
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return { createInvoice, loading, error };
+}
+
+
+
+// Tipo para la request (basado en el esquema y lo que espera el endpoint)
+interface CreateBuyOrderRequest {
+    id: string;
+    status: string;
+    total: number;
+    items: string[];
+    date: {
+        year: number;
+        month: number;
+        day: number;
+    };
+    voided: boolean;
+}
+
+// Tipo para la respuesta (basado en lo que devuelve el endpoint)
+interface CreatedBuyOrderResponse {
+    id: string;          // elementId de Neo4j
+    ID: string;          // El id que enviaste
+    Status: string;
+    Total: number;
+    Items: string[];
+    Date: string;        // En formato fecha (si lo devuelves así)
+    Voided: boolean;
+}
+
+// Hook personalizado
+export function useCreateBuyOrder() {
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const createBuyOrder = async (buyOrderData: CreateBuyOrderRequest): Promise<CreatedBuyOrderResponse | null> => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const response = await axiosInstance.post<CreatedBuyOrderResponse>('invoices/buyOrder', buyOrderData);
+            return response.data;  // Devuelve la orden de compra creada
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Error al crear la orden de compra');
+            return null;  // En caso de error retorna null
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return { createBuyOrder, loading, error };
+}

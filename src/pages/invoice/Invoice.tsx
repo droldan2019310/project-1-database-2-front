@@ -16,8 +16,17 @@ import ReactFlow, {
     Handle,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { useGetInvoices } from '../../hooks/useInvoice';
-import { Pagination, CircularProgress, Dialog, DialogTitle, DialogContent, Typography, List, ListItem, ListItemText, DialogActions, Button } from '@mui/material';
+import { Pagination, CircularProgress, Dialog, DialogTitle, DialogContent, Typography, DialogActions, Button, Box, TextField, IconButton, Menu, MenuItem } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
+import ClearIcon from '@mui/icons-material/Clear';
+import axiosInstance from '../../hooks/axiosInstance';
+import AddIcon from '@mui/icons-material/Add';
+import CreateDialogProduct from '../../dialog/CreateDialogProduct';
+import CreateDialogInvoice from '../../dialog/CreateDialogInvoice';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import CreateDialogProductCloned from '../../dialog/CreateDialogProductInvoice';
+import { toast } from 'react-toastify';
+import CreateRelationshipInvoice from '../../dialog/CreateRelationshipInvoice';
 
 // Interfaces
 interface Product {
@@ -58,48 +67,22 @@ type NodeData = {
 
 // Helper para formatear fecha
 const formatNeo4jDate = (date?: Neo4jDate): string => {
-    if (!date || !date.year || !date.month || !date.day) {
-        return 'Fecha no disponible';
-    }
-    const year = date.year.low;
-    const month = String(date.month.low).padStart(2, '0');
-    const day = String(date.day.low).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    if (!date) return 'Fecha no disponible';
+    return `${date.year.low}-${String(date.month.low).padStart(2, '0')}-${String(date.day.low).padStart(2, '0')}`;
 };
 
-// Nodos
+// Nodo de Factura
 const InvoiceNode = ({ data }: { data: NodeData }) => (
-    <div
-        onDoubleClick={() => data.onDoubleClick(data)}
-        style={{ 
-            padding: 10, 
-            backgroundColor: '#f0f8ff', 
-            border: '1px solid #66b3ff', 
-            borderRadius: 5, 
-            textAlign: 'center', 
-            cursor: 'pointer',
-            minWidth: 150
-        }}
-    >
+    <div onDoubleClick={() => data.onDoubleClick(data)} style={nodeStyle('#f0f8ff', '#66b3ff')}>
         <strong>{data.invoice?.Name}</strong>
         <p>Q{data.invoice?.Total}</p>
         <Handle type="source" position={Position.Right} />
     </div>
 );
 
+// Nodo de Producto
 const ProductNode = ({ data }: { data: NodeData }) => (
-    <div
-        onDoubleClick={() => data.onDoubleClick(data)}
-        style={{ 
-            padding: 10, 
-            backgroundColor: '#fff0f0', 
-            border: '1px solid #ff6f61', 
-            borderRadius: 5, 
-            textAlign: 'center', 
-            cursor: 'pointer',
-            minWidth: 150
-        }}
-    >
+    <div onDoubleClick={() => data.onDoubleClick(data)} style={nodeStyle('#fff0f0', '#ff6f61')}>
         <strong>{data.product?.Name}</strong>
         <p>{data.product?.Category}</p>
         <p>Q{data.product?.Price}</p>
@@ -107,61 +90,87 @@ const ProductNode = ({ data }: { data: NodeData }) => (
     </div>
 );
 
-// Componente principal
+// Estilo base para nodos
+const nodeStyle = (bgColor: string, borderColor: string): React.CSSProperties => ({
+    padding: 10,
+    backgroundColor: bgColor,
+    border: `1px solid ${borderColor}`,
+    borderRadius: 5,
+    textAlign: 'center',
+    cursor: 'pointer',
+    minWidth: 150,
+});
+
 const InvoiceGraph: React.FC = () => {
     const [page, setPage] = useState(1);
-    const { invoices, totalPages, loading, error } = useGetInvoices(page);
+    const [search, setSearch] = useState('');
+    const [isSearching, setIsSearching] = useState(false);
+    const [invoices, setInvoices] = useState<Invoice[]>([]);
+    const [totalPages, setTotalPages] = useState(1);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     const [nodes, setNodes] = useState<Node<NodeData>[]>([]);
     const [edges, setEdges] = useState<Edge[]>([]);
     const [selectedNode, setSelectedNode] = useState<NodeData | null>(null);
 
-    useEffect(() => {
-        if (invoices.length === 0) return;
+    const fetchInvoices = async (currentPage: number) => {
+        setLoading(true);
+        setError(null);
+        try {
+            const url = isSearching 
+                ? `/invoices/search/${search}?page=${currentPage}&limit=5` 
+                : `/invoices?page=${currentPage}&limit=5`;
 
+            const response = await axiosInstance.get(url);
+            const { invoices, totalPages } = response.data;
+
+            invoices.forEach((inv: Invoice) => {
+                inv.formattedDate = formatNeo4jDate(inv.Date);
+            });
+
+            setInvoices(invoices);
+            setTotalPages(totalPages);
+        } catch (err: any) {
+            setError(err.message || 'Error al cargar facturas');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchInvoices(page);
+    }, [page, isSearching]);
+
+    useEffect(() => {
         const newNodes: Node<NodeData>[] = [];
         const newEdges: Edge[] = [];
 
-        const radius = 300;
-        const centerX = 400;
-        const centerY = 300;
-        const angleStep = (2 * Math.PI) / invoices.length;
-
         invoices.forEach((invoice, index) => {
-            const angle = index * angleStep;
-            const invoiceX = centerX + radius * Math.cos(angle);
-            const invoiceY = centerY + radius * Math.sin(angle);
+            const yBase = index * 200;
 
             newNodes.push({
                 id: invoice.id,
                 type: 'invoice',
-                position: { x: invoiceX, y: invoiceY },
-                data: {
-                    type: 'invoice',
-                    invoice,
-                    onDoubleClick: handleNodeDoubleClick,
-                },
+                position: { x: 300, y: yBase },
+                data: { type: 'invoice', invoice, onDoubleClick: handleNodeDoubleClick },
+                draggable: true,
             });
 
             invoice.products.forEach((product, subIndex) => {
-                const productX = invoiceX + 300;
-                const productY = invoiceY + (subIndex * 100) - (invoice.products.length * 50) / 2;
-
+                const productId = product.id;
                 newNodes.push({
-                    id: product.id,
+                    id: productId,
                     type: 'product',
-                    position: { x: productX, y: productY },
-                    data: {
-                        type: 'product',
-                        product,
-                        onDoubleClick: handleNodeDoubleClick,
-                    },
+                    position: { x: 600, y: yBase + subIndex * 80 },
+                    data: { type: 'product', product, onDoubleClick: handleNodeDoubleClick },
+                    draggable: true,
                 });
 
                 newEdges.push({
-                    id: `edge-${invoice.id}-${product.id}`,
+                    id: `edge-${invoice.id}-${productId}`,
                     source: invoice.id,
-                    target: product.id,
+                    target: productId,
                     label: product.relationshipType,
                     animated: true,
                     style: { stroke: '#888' },
@@ -172,6 +181,12 @@ const InvoiceGraph: React.FC = () => {
         setNodes(newNodes);
         setEdges(newEdges);
     }, [invoices]);
+
+    const handleNodeDoubleClick = (nodeData: NodeData) => {
+        setSelectedNode(nodeData);
+    };
+
+    const handleCloseDialog = () => setSelectedNode(null);
 
     const onNodesChange = useCallback((changes: NodeChange[]) => {
         setNodes((nds) => applyNodeChanges(changes, nds));
@@ -185,12 +200,15 @@ const InvoiceGraph: React.FC = () => {
         setEdges((eds) => addEdge(connection, eds));
     }, []);
 
-    const handleNodeDoubleClick = (nodeData: NodeData) => {
-        setSelectedNode(nodeData);
-    };
-
-    const handleCloseDialog = () => {
-        setSelectedNode(null);
+    const handleSearch = () => {
+        if (isSearching) {
+            setSearch('');
+            setIsSearching(false);
+            fetchInvoices(page);
+        } else {
+            setIsSearching(true);
+            setPage(1);
+        }
     };
 
     const nodeTypes = useMemo(() => ({
@@ -198,14 +216,128 @@ const InvoiceGraph: React.FC = () => {
         product: ProductNode,
     }), []);
 
+
+    const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+        
+        
+    const handleMenuOpen = (event: React.MouseEvent<HTMLButtonElement>) => {
+        setAnchorEl(event.currentTarget);
+    };
+
+        const handleMenuClose = () => {
+        setAnchorEl(null);
+    };
+    const [openCreateDialogInvoice, setOpenCreateDialogInvoice] = useState(false);
+    const [openCreateDialogProduct, setOpenCreateDialogProduct] = useState(false);
+
+    const handleInvoiceCreated = (newInvoice: any) => {
+        const newNode: Node = {
+            id: newInvoice.id,  // Aquí usamos el `id` que retorna el backend (elementId de Neo4j)
+            type: 'invoice',
+            position: { x: 600, y: 300 },  // Puedes ajustar esta posición si es necesario
+            data: { type: 'invoice', invoice: newInvoice, onDoubleClick: handleNodeDoubleClick },
+            draggable: true,
+        };
+    
+        setNodes((prevNodes) => [...prevNodes, newNode]);
+    };
+
+
+    const handleProductCreated = (newProduct: any) => {
+        const newNode: Node = {
+            id: newProduct.id,  // El id que retorna el backend (elementId de Neo4j)
+            type: 'product',     // Tipo de nodo es 'product'
+            position: { x: 600, y: 300 },  // Ajusta la posición si es necesario
+            data: { type: 'product', product: newProduct, onDoubleClick: handleNodeDoubleClick },
+            draggable: true,
+        };
+    
+        setNodes((prevNodes) => [...prevNodes, newNode]);
+    };
+
+
+    const handleCreateRelation = async (
+        sourceId: string,   // Invoice ID
+        targetId: string,   // Product ID
+        fields: Record<string, any>  // { quantity, discount, price, sub_total }
+    ) => {
+        const payload = {
+            sourceId,
+            targetId,
+            ...fields
+        };
+    
+        try {
+            console.log('Creando relación (Invoice → Product) con payload:', payload);
+    
+            await axiosInstance.post('invoices/relationship', payload);
+    
+            toast.success('Relación creada exitosamente');
+    
+            setEdges((prevEdges) => [
+                ...prevEdges,
+                {
+                    id: `${sourceId}-${targetId}`,
+                    source: sourceId,
+                    target: targetId,
+                    label: `CONTAINS`, // Nombre fijo de la relación
+                    animated: true,
+                    style: { stroke: '#888' },
+                }
+            ]);
+        } catch (error: any) {
+            console.error('Error al crear relación (Invoice → Product):', error);
+            toast.error(`Error: ${error.response?.data?.message || error.message}`);
+        }
+    };
+
+    const [openCreateDialogRelationship, setOpenCreateDialogRelationship] = useState(false);
+
+    
+    
     return (
         <div style={{ width: '100%', height: '80vh', backgroundColor: '#F7F9FB' }}>
+            <Box display="flex" alignItems="center" gap={1} mb={2}>
+                <TextField
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    placeholder="Buscar por Cashier Main"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                />
+                <IconButton color="primary" onClick={handleSearch}>
+                    {isSearching ? <ClearIcon /> : <SearchIcon />}
+                </IconButton>
+                <IconButton color="primary" onClick={handleMenuOpen}>
+                        <MoreVertIcon />
+                </IconButton>
+
+                <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+                       
+                           
+                    
+                    <MenuItem onClick={() => { setOpenCreateDialogInvoice(true); handleMenuClose(); }}>
+                        <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                        Agregar Invoice
+                    </MenuItem>
+
+                    <MenuItem onClick={() => { setOpenCreateDialogProduct(true); handleMenuClose(); }}>
+                        <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                        Agregar Producto
+                    </MenuItem>
+
+                    <MenuItem onClick={() => { setOpenCreateDialogRelationship(true); handleMenuClose(); }}>
+                        <AddIcon fontSize="small" style={{ marginRight: 8 }} />
+                        Agregar Relacion
+                    </MenuItem>
+                </Menu>
+            </Box>
+
             {loading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-                    <CircularProgress />
-                </div>
+                <CircularProgress />
             ) : error ? (
-                <p style={{ color: 'red' }}>{error}</p>
+                <Typography color="error">{error}</Typography>
             ) : (
                 <>
                     <ReactFlow
@@ -223,29 +355,31 @@ const InvoiceGraph: React.FC = () => {
                     </ReactFlow>
 
                     <Pagination count={totalPages} page={page} onChange={(_, newPage) => setPage(newPage)} />
+                   
+                    
+                    <CreateDialogProductCloned
+                        open={openCreateDialogProduct}
+                        onClose={() => setOpenCreateDialogProduct(false)}
+                        onProductCreated={handleProductCreated}
+                    />
 
-                    {/* Dialog para ver detalles */}
+                    <CreateRelationshipInvoice
+                        open={openCreateDialogRelationship}
+                        onClose={() => setOpenCreateDialogRelationship(false)}
+                        onCreate={handleCreateRelation}
+                    />
+
+
+                    <CreateDialogInvoice
+                        open={openCreateDialogInvoice}
+                        onClose={() => setOpenCreateDialogInvoice(false)}
+                        onInvoiceCreated={handleInvoiceCreated}
+                    />
+
                     <Dialog open={!!selectedNode} onClose={handleCloseDialog}>
-                        <DialogTitle>
-                            {selectedNode?.type === 'invoice' ? 'Detalles de la Factura' : 'Detalles del Producto'}
-                        </DialogTitle>
-                        <DialogContent dividers>
-                            {selectedNode?.type === 'invoice' && selectedNode.invoice && (
-                                <>
-                                    <Typography><strong>ID:</strong> {selectedNode.invoice.ID}</Typography>
-                                    <Typography><strong>Nombre:</strong> {selectedNode.invoice.Name}</Typography>
-                                    <Typography><strong>Total:</strong> Q{selectedNode.invoice.Total}</Typography>
-                                    <Typography><strong>Fecha:</strong> {formatNeo4jDate(selectedNode.invoice.Date)}</Typography>
-                                    <Typography><strong>Estado:</strong> {selectedNode.invoice.Status}</Typography>
-                                </>
-                            )}
-                            {selectedNode?.type === 'product' && selectedNode.product && (
-                                <>
-                                    <Typography><strong>Nombre:</strong> {selectedNode.product.Name}</Typography>
-                                    <Typography><strong>Categoría:</strong> {selectedNode.product.Category}</Typography>
-                                    <Typography><strong>Precio:</strong> Q{selectedNode.product.Price}</Typography>
-                                </>
-                            )}
+                        <DialogTitle>Detalles</DialogTitle>
+                        <DialogContent>
+                            <pre>{JSON.stringify(selectedNode, null, 2)}</pre>
                         </DialogContent>
                         <DialogActions>
                             <Button onClick={handleCloseDialog}>Cerrar</Button>
